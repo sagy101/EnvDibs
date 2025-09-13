@@ -1,0 +1,16 @@
+name = "envdibs"
+main = "src/worker.ts"
+compatibility_date = "2024-12-01"
+
+# For local testing with a public URL usable by Slack, run:
+#   wrangler dev --remote
+# This executes your Worker in the Cloudflare network and gives you a *.workers.dev URL.
+
+# D1 database binding (Phase 1+). Create the DB and fill database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "envdibs"
+database_id = "163a1ab1-43f8-46f9-b225-a1f5c6799aaf"
+
+[triggers]
+crons = ["* * * * *"] # every minute

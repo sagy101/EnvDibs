@@ -1,0 +1,30 @@
+{
+  "name": "teamenvdibs",
+  "version": "1.0.0",
+  "description": "<!-- Badges --> [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F48120?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/) [![Slack](https://img.shields.io/badge/Slack-App-4A154B?logo=slack&logoColor=white)](https://api.slack.com/apps)",
+  "main": "eslint.config.js",
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.71",
+    "@eslint/js": "^9.35.0",
+    "@typescript-eslint/eslint-plugin": "^8.43.0",
+    "@typescript-eslint/parser": "^8.43.0",
+    "eslint": "^9.35.0",
+    "eslint-plugin-import": "^2.32.0",
+    "vitest": "^3.2.4"
+  },
+  "scripts": {
+    "test": "vitest run -c vitest.config.ts",
+    "test:watch": "vitest -c vitest.config.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagy101/TeamEnvDibs.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sagy101/TeamEnvDibs/issues"
+  },
+  "homepage": "https://github.com/sagy101/TeamEnvDibs#readme"
+}
