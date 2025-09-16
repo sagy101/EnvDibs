@@ -1,5 +1,5 @@
 {
-  "name": "teamenvdibs",
+  "name": "env-dibs",
   "version": "1.0.0",
   "description": "<!-- Badges --> [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F48120?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/) [![Slack](https://img.shields.io/badge/Slack-App-4A154B?logo=slack&logoColor=white)](https://api.slack.com/apps)",
   "main": "eslint.config.js",

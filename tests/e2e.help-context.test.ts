@@ -13,10 +13,10 @@ describe('Help context visibility', () => {
     expect(r.status).toBe(200);
     const txt = String(r.json.text || '');
     expect(txt).toContain('Basics');
-    expect(txt).toContain('/dib list');
+    expect(txt).toContain('/claim list');
     expect(txt).not.toContain('Manage Environments (admin)');
-    expect(txt).not.toContain('/dib admin ');
-    expect(txt).not.toContain('/dib force-off');
+    expect(txt).not.toContain('/claim admin ');
+    expect(txt).not.toContain('/claim force-off');
   });
 
   it('admin sees admin sections', async () => {
@@ -24,7 +24,7 @@ describe('Help context visibility', () => {
     expect(r.status).toBe(200);
     const txt = String(r.json.text || '');
     expect(txt).toContain('Manage Environments (admin)');
-    expect(txt).toContain('/dib set-default');
-    expect(txt).toContain('/dib admin ');
+    expect(txt).toContain('/claim set-default');
+    expect(txt).toContain('/claim admin ');
   });
 });

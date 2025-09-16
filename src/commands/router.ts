@@ -2,11 +2,11 @@ import { isAdmin, addAdmin as addAdminUser, removeAdmin as removeAdminUser, list
 import { dibOn, dibOff, listEnvironments, dibExtend, dibInfo, forceOff, transferHold } from '../services/dibs';
 import { addEnvironment, setDefaultTTL, setEnvAnnounceEnabled, setEnvChannelId, setMaxTTL, archiveEnvironment, renameEnvironment, unarchiveEnvironment } from '../services/envs';
 import { getLogLevel, log, normalizeLevel, setLogLevel } from '../services/log';
-import { getAnnounceGlobalEnabled, getDmEnabled, getDmExpiryEnabled, getDmReminderEnabled, getReminderLeadSeconds, getReminderMinTTLSeconds, setAnnounceGlobalEnabled, setDmEnabled, setDmExpiryEnabled, setDmReminderEnabled, setReminderLeadSeconds, setReminderMinTTLSeconds, getDefaultExtendSeconds, setDefaultExtendSeconds } from '../services/settings';
+import { getAnnounceGlobalEnabled, getDmEnabled, getDmExpiryEnabled, getDmReminderEnabled, getReminderLeadSeconds, getReminderMinTTLSeconds, setAnnounceGlobalEnabled, setDmEnabled, setDmExpiryEnabled, setDmReminderEnabled, setReminderLeadSeconds, setReminderMinTTLSeconds, getDefaultExtendSeconds, setDefaultExtendSeconds, getCommandAcksEnabled, setCommandAcksEnabled } from '../services/settings';
 import { resolveChannelId, viewsOpen } from '../slack/api';
 import { humanizeSeconds } from '../slack/format';
 import { buildAdminSettingsModal } from '../slack/modals/admin_settings';
-import { ephemeral } from '../slack/respond';
+import { ephemeral, noAck } from '../slack/respond';
 import type { Env, ExecutionContext } from '../types';
 import { parseDurationToSeconds } from '../util/durations';
 import { parseChannelId } from '../util/slack_ids';
@@ -39,7 +39,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       await requireAdmin(ctx.user_id, env);
       const name = tokens.shift();
       if (!name) {
-        return ephemeral('Usage: /dib force-off <env>');
+        return ephemeral('Usage: /claim force-off <env>');
       }
       const r = await forceOff(env, ctx.user_id, name, execCtx);
       return ephemeral(r.message);
@@ -51,7 +51,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       const toWord = tokens.shift();
       const userArg = tokens.shift();
       if (!name || toWord !== 'to' || !userArg) {
-        return ephemeral('Usage: /dib transfer <env> to <@user|U123>');
+        return ephemeral('Usage: /claim transfer <env> to <@user|U123>');
       }
       const uid = parseUserId(userArg);
       if (!uid) {
@@ -65,7 +65,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       await requireAdmin(ctx.user_id, env);
       const name = tokens.shift();
       if (!name) {
-        return ephemeral('Usage: /dib archive <env>');
+        return ephemeral('Usage: /claim archive <env>');
       }
       const r = await archiveEnvironment(env, name);
       return ephemeral(r.message);
@@ -74,7 +74,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       await requireAdmin(ctx.user_id, env);
       const name = tokens.shift();
       if (!name) {
-        return ephemeral('Usage: /dib unarchive <env>');
+        return ephemeral('Usage: /claim unarchive <env>');
       }
       const r = await unarchiveEnvironment(env, name);
       return ephemeral(r.message);
@@ -84,7 +84,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       const name = tokens.shift();
       const to = tokens.shift();
       if (!name || !to) {
-        return ephemeral('Usage: /dib rename <env> <new-name>');
+        return ephemeral('Usage: /claim rename <env> <new-name>');
       }
       const r = await renameEnvironment(env, name, to);
       return ephemeral(r.message);
@@ -95,7 +95,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       const sub = tokens.shift();
       if (!sub) {
         const g = await getAnnounceGlobalEnabled(env);
-        return ephemeral(`Usage: /dib announce <on|off> | announce <env> <on|off> | announce channel <env> <#channel|C123>. Current: global=${g ? 'on' : 'off'}`);
+        return ephemeral(`Usage: /claim announce <on|off> | announce <env> <on|off> | announce channel <env> <#channel|C123>. Current: global=${g ? 'on' : 'off'}`);
       }
       if (sub === 'on' || sub === 'off') {
         await setAnnounceGlobalEnabled(env, sub === 'on');
@@ -105,7 +105,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
         const envName = tokens.shift();
         const chArg = tokens.shift();
         if (!envName || !chArg) {
-          return ephemeral('Usage: /dib announce channel <env> <#channel|C123>');
+          return ephemeral('Usage: /claim announce channel <env> <#channel|C123>');
         }
         let chId = parseChannelId(chArg);
         if (!chId) {
@@ -121,7 +121,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       const envName = sub;
       const state = tokens.shift();
       if (!state || (state !== 'on' && state !== 'off')) {
-        return ephemeral('Usage: /dib announce <env> <on|off>');
+        return ephemeral('Usage: /claim announce <env> <on|off>');
       }
       const r = await setEnvAnnounceEnabled(env, envName, state === 'on');
       return ephemeral(r.message);
@@ -138,6 +138,19 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
         const ok = await viewsOpen(env, ctx.trigger_id, view);
         return ephemeral(ok ? 'Opened admin settings modal.' : 'Failed to open modal.');
       }
+      // Toggle slash command acknowledgements (on/off/extend)
+      if (sub === 'acks') {
+        await requireAdmin(ctx.user_id, env);
+        tokens.shift(); // consume 'acks'
+        const state = tokens.shift()?.toLowerCase();
+        if (!state || (state !== 'on' && state !== 'off')) {
+          const cur = await getCommandAcksEnabled(env);
+          return ephemeral(`Usage: /claim settings acks <on|off>. Current: ${cur ? 'on' : 'off'}`);
+        }
+        await setCommandAcksEnabled(env, state === 'on');
+        await log(env, 'info', 'router: settings acks toggled', { state, by: ctx.user_id });
+        return ephemeral(`Slash acks (on/off/extend) are now ${state}.`);
+      }
       const global = await getDmEnabled(env);
       const rem = await getDmReminderEnabled(env);
       const exp = await getDmExpiryEnabled(env);
@@ -146,6 +159,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       const defExt = await getDefaultExtendSeconds(env);
       const level = await getLogLevel(env);
       const ann = await getAnnounceGlobalEnabled(env);
+      const acks = await getCommandAcksEnabled(env);
       const lines = [
         '*Settings*',
         '────────',
@@ -157,6 +171,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
         `• *Reminder min TTL*: ${humanizeSeconds(min)}`,
         `• *Default extend*: ${humanizeSeconds(defExt)}`,
         `• *Log level*: ${level}`,
+        `• *Slash acks (on/off/extend)*: ${acks ? 'on' : 'off'}`,
       ];
       return ephemeral(lines.join('\n'));
     }
@@ -166,7 +181,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       if (!sub || (sub !== 'lead' && sub !== 'min')) {
         const lead = await getReminderLeadSeconds(env);
         const min = await getReminderMinTTLSeconds(env);
-        return ephemeral(`Usage: /dib reminders <lead|min> <duration>. Current: lead=${humanizeSeconds(lead)}, min=${humanizeSeconds(min)}.`);
+        return ephemeral(`Usage: /claim reminders <lead|min> <duration>. Current: lead=${humanizeSeconds(lead)}, min=${humanizeSeconds(min)}.`);
       }
       const dur = tokens.shift();
       const sec = parseDurationToSeconds(dur || '');
@@ -184,7 +199,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
     case 'extend-default': {
       await requireAdmin(ctx.user_id, env);
       const dur = tokens.shift();
-      if (!dur) {return ephemeral('Usage: /dib extend-default <duration>');}
+      if (!dur) {return ephemeral('Usage: /claim extend-default <duration>');}
       const sec = parseDurationToSeconds(dur || '');
       if (!sec) {return ephemeral('Invalid duration. Example: 15m, 30m, 1h');}
       await setDefaultExtendSeconds(env, sec);
@@ -194,7 +209,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
 
     case 'extend': {
       const name = tokens.shift();
-      if (!name) {return ephemeral('Usage: /dib extend <env> [for <duration>]');}
+      if (!name) {return ephemeral('Usage: /claim extend <env> [for <duration>]');}
       let extendSeconds: number | undefined;
       if (tokens[0] === 'for') {
         tokens.shift();
@@ -208,12 +223,13 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
         extendSeconds = await getDefaultExtendSeconds(env);
       }
       const resp = await dibExtend(env, ctx.user_id, name, extendSeconds);
+      // Extend should always respond, regardless of acks setting
       return ephemeral(resp.message);
     }
 
     case 'info': {
       const name = tokens.shift();
-      if (!name) {return ephemeral('Usage: /dib info <env>');}
+      if (!name) {return ephemeral('Usage: /claim info <env>');}
       const resp = await dibInfo(env, ctx.user_id, name);
       return ephemeral(resp.message);
     }
@@ -222,7 +238,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       await requireAdmin(ctx.user_id, env);
       const name = tokens.shift();
       const dur = tokens.shift();
-      if (!name || !dur) {return ephemeral('Usage: /dib set-default <env> <duration>');}
+      if (!name || !dur) {return ephemeral('Usage: /claim set-default <env> <duration>');}
       const sec = parseDurationToSeconds(dur);
       if (!sec) {return ephemeral('Invalid duration. Example: 2h, 90m');}
       const r = await setDefaultTTL(env, name, sec);
@@ -233,8 +249,8 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       await requireAdmin(ctx.user_id, env);
       const name = tokens.shift();
       const dur = tokens.shift();
-      if (!name) {return ephemeral('Usage: /dib set-max <env> <duration|none>');}
-      if (!dur) {return ephemeral('Usage: /dib set-max <env> <duration|none>');}
+      if (!name) {return ephemeral('Usage: /claim set-max <env> <duration|none>');}
+      if (!dur) {return ephemeral('Usage: /claim set-max <env> <duration|none>');}
       let sec: number | null = null;
       if (dur.toLowerCase() !== 'none') {
         const parsed = parseDurationToSeconds(dur);
@@ -249,7 +265,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       await requireAdmin(ctx.user_id, env);
       const sub = tokens.shift()?.toLowerCase();
       if (!sub || (sub !== 'add' && sub !== 'remove' && sub !== 'list')) {
-        return ephemeral('Usage: /dib admin <add|remove|list> [<@user|U123>]');
+        return ephemeral('Usage: /claim admin <add|remove|list> [<@user|U123>]');
       }
       if (sub === 'list') {
         const ids = await listAdmins(env);
@@ -257,7 +273,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       }
       const userArg = tokens.shift();
       const uid = parseUserId(userArg || '');
-      if (!uid) {return ephemeral('Please specify a user: /dib admin add <@user>');}
+      if (!uid) {return ephemeral('Please specify a user: /claim admin add <@user>');}
       if (sub === 'add') {
         const r = await addAdminUser(env, ctx.user_id, uid);
         return ephemeral(r.message);
@@ -270,7 +286,7 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       const val = tokens.shift();
       if (!val) {
         const cur = await getLogLevel(env);
-        return ephemeral(`Current log level: ${cur}. Usage: /dib log <info|warning|error>`);
+        return ephemeral(`Current log level: ${cur}. Usage: /claim log <info|warning|error>`);
       }
       const lvl = normalizeLevel(val);
       if (!lvl) {return ephemeral('Invalid level. Use: info | warning | error');}
@@ -285,14 +301,14 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
         const global = await getDmEnabled(env);
         const rem = await getDmReminderEnabled(env);
         const exp = await getDmExpiryEnabled(env);
-        return ephemeral(`Usage: /dib dms <on|off> | dms reminder <on|off> | dms expiry <on|off> (admin).\nCurrent: global=${global ? 'on' : 'off'}, reminder=${rem ? 'on' : 'off'}, expiry=${exp ? 'on' : 'off'}`);
+        return ephemeral(`Usage: /claim dms <on|off> | dms reminder <on|off> | dms expiry <on|off> (admin).\nCurrent: global=${global ? 'on' : 'off'}, reminder=${rem ? 'on' : 'off'}, expiry=${exp ? 'on' : 'off'}`);
       }
       if (sub === 'reminder' || sub === 'expiry') {
         const state = tokens.shift()?.toLowerCase();
         if (!state || (state !== 'on' && state !== 'off')) {
           const rem = await getDmReminderEnabled(env);
           const exp = await getDmExpiryEnabled(env);
-          return ephemeral(`Usage: /dib dms ${sub} <on|off>. Current: reminder=${rem ? 'on' : 'off'}, expiry=${exp ? 'on' : 'off'}`);
+          return ephemeral(`Usage: /claim dms ${sub} <on|off>. Current: reminder=${rem ? 'on' : 'off'}, expiry=${exp ? 'on' : 'off'}`);
         }
         if (sub === 'reminder') {
           await setDmReminderEnabled(env, state === 'on');
@@ -311,12 +327,12 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       const global = await getDmEnabled(env);
       const rem = await getDmReminderEnabled(env);
       const exp = await getDmExpiryEnabled(env);
-      return ephemeral(`Unknown option. Usage: /dib dms <on|off> | dms reminder <on|off> | dms expiry <on|off>. Current: global=${global ? 'on' : 'off'}, reminder=${rem ? 'on' : 'off'}, expiry=${exp ? 'on' : 'off'}`);
+      return ephemeral(`Unknown option. Usage: /claim dms <on|off> | dms reminder <on|off> | dms expiry <on|off>. Current: global=${global ? 'on' : 'off'}, reminder=${rem ? 'on' : 'off'}, expiry=${exp ? 'on' : 'off'}`);
     }
     case 'add': {
       await requireAdmin(ctx.user_id, env);
       const name = tokens.shift();
-      if (!name) {return ephemeral('Usage: /dib add <env> [default <duration>] [desc <text>]');}
+      if (!name) {return ephemeral('Usage: /claim add <env> [default <duration>] [desc <text>]');}
       let defaultSeconds: number | undefined;
       let desc: string | undefined;
       while (tokens.length) {
@@ -342,7 +358,8 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
 
     case 'on': {
       const name = tokens.shift();
-      if (!name) {return ephemeral('Usage: /dib on <env> [for <duration>] [note <text>]');}
+      const acks = await getCommandAcksEnabled(env);
+      if (!name) {return ephemeral('Usage: /claim on <env> [for <duration>] [note <text>]');}
       let requestedSeconds: number | undefined;
       let note: string | undefined;
       while (tokens.length) {
@@ -363,15 +380,16 @@ export async function routeCommand(ctx: CommandContext, env: Env, execCtx?: Exec
       }
       await log(env, 'info', 'router: on env', { name, requestedSeconds, hasNote: Boolean(note) });
       const resp = await dibOn(env, ctx.user_id, name, { requestedSeconds, note }, execCtx);
-      return ephemeral(resp.message);
+      return acks ? ephemeral(resp.message) : (resp.ok ? noAck() : ephemeral(resp.message));
     }
 
     case 'off': {
       const name = tokens.shift();
-      if (!name) {return ephemeral('Usage: /dib off <env>');}
+      const acks = await getCommandAcksEnabled(env);
+      if (!name) {return ephemeral('Usage: /claim off <env>');}
       await log(env, 'info', 'router: off env', { name });
       const resp = await dibOff(env, ctx.user_id, name, execCtx);
-      return ephemeral(resp.message);
+      return acks ? ephemeral(resp.message) : (resp.ok ? noAck() : ephemeral(resp.message));
     }
 
     case 'list': {

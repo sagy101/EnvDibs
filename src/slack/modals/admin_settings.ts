@@ -20,6 +20,8 @@ export const GL_LOG_BLOCK = 'gl_log_block';
 export const GL_LOG_ACTION = 'gl_log_action';
 export const GL_EXT_BLOCK = 'gl_ext_block';
 export const GL_EXT_ACTION = 'gl_ext_action';
+export const GL_ACKS_BLOCK = 'gl_acks_block';
+export const GL_ACKS_ACTION = 'gl_acks_action';
 
 export const ENV_SELECT_BLOCK = 'env_sel_block';
 export const ENV_SELECT_ACTION = 'env_sel_action';
@@ -36,7 +38,7 @@ export const ENV_CH_ACTION = 'env_ch_action';
 
 export async function buildAdminSettingsModal(env: Env, selectedEnvName?: string, opts?: { dmOverride?: boolean }): Promise<any> {
   // Load current global settings
-  const [dm, rem, exp, lead, min, level, ann, defExt] = await Promise.all([
+  const [dm, rem, exp, lead, min, level, ann, defExt, acks] = await Promise.all([
     (await import('../../services/settings')).getDmEnabled(env),
     (await import('../../services/settings')).getDmReminderEnabled(env),
     (await import('../../services/settings')).getDmExpiryEnabled(env),
@@ -45,6 +47,7 @@ export async function buildAdminSettingsModal(env: Env, selectedEnvName?: string
     getLogLevel(env),
     (await import('../../services/settings')).getAnnounceGlobalEnabled(env),
     (await import('../../services/settings')).getDefaultExtendSeconds(env),
+    (await import('../../services/settings')).getCommandAcksEnabled(env),
   ]);
 
   const dmOn = typeof opts?.dmOverride === 'boolean' ? opts.dmOverride : dm;
@@ -113,6 +116,10 @@ export async function buildAdminSettingsModal(env: Env, selectedEnvName?: string
           ],
           initial_option: { text: { type: 'plain_text', text: level }, value: level },
         },
+      },
+      {
+        type: 'input', block_id: GL_ACKS_BLOCK, label: { type: 'plain_text', text: 'Slash responses (on/off)' }, optional: true,
+        element: { ...onOff(acks), action_id: GL_ACKS_ACTION },
       },
       {
         type: 'input', block_id: GL_EXT_BLOCK, label: { type: 'plain_text', text: 'Default extend' }, optional: true,

@@ -2,7 +2,7 @@ import { publishHomeThrottled } from './home';
 import { dibExtend, dibOff, dibInfo, dibOn } from '../services/dibs';
 import { getEnvByName, renameEnvironment, setDefaultTTL, setEnvAnnounceEnabled, setEnvChannelId, setMaxTTL } from '../services/envs';
 import { log, normalizeLevel, setLogLevel } from '../services/log';
-import { setAnnounceGlobalEnabled, setDmEnabled, setDmExpiryEnabled, setDmReminderEnabled, setReminderLeadSeconds, setReminderMinTTLSeconds, getDefaultExtendSeconds, setDefaultExtendSeconds } from '../services/settings';
+import { setAnnounceGlobalEnabled, setDmEnabled, setDmExpiryEnabled, setDmReminderEnabled, setReminderLeadSeconds, setReminderMinTTLSeconds, getDefaultExtendSeconds, setDefaultExtendSeconds, setCommandAcksEnabled } from '../services/settings';
 import { respondEphemeral, sendDM, viewsOpen, viewsUpdate } from '../slack/api';
 import {
   ADMIN_SETTINGS_CALLBACK_ID,
@@ -14,6 +14,7 @@ import {
   GL_MIN_BLOCK, GL_MIN_ACTION,
   GL_LOG_BLOCK, GL_LOG_ACTION,
   GL_EXT_BLOCK, GL_EXT_ACTION,
+  GL_ACKS_BLOCK, GL_ACKS_ACTION,
   ENV_SELECT_BLOCK, ENV_SELECT_ACTION,
   ENV_DEF_BLOCK, ENV_DEF_ACTION,
   ENV_MAX_BLOCK, ENV_MAX_ACTION,
@@ -187,6 +188,7 @@ export async function routeInteractive(env: Env, payload: any): Promise<void> {
           const minTxt = values?.[GL_MIN_BLOCK]?.[GL_MIN_ACTION]?.value as string | undefined;
           const logSel = values?.[GL_LOG_BLOCK]?.[GL_LOG_ACTION]?.selected_option?.value as string | undefined;
           const defExtTxt = values?.[GL_EXT_BLOCK]?.[GL_EXT_ACTION]?.value as string | undefined;
+          const ackSel = values?.[GL_ACKS_BLOCK]?.[GL_ACKS_ACTION]?.selected_option?.value as string | undefined;
 
           if (dmSel === 'on' || dmSel === 'off') { await setDmEnabled(env, dmSel === 'on'); }
           if (remSel === 'on' || remSel === 'off') { await setDmReminderEnabled(env, remSel === 'on'); }
@@ -204,6 +206,7 @@ export async function routeInteractive(env: Env, payload: any): Promise<void> {
             const sec = parseDurationToSeconds(defExtTxt.trim());
             if (typeof sec === 'number' && sec > 0) { await setDefaultExtendSeconds(env, sec); }
           }
+          if (ackSel === 'on' || ackSel === 'off') { await setCommandAcksEnabled(env, ackSel === 'on'); }
 
           // Per-env
           const envName = values?.[ENV_SELECT_BLOCK]?.[ENV_SELECT_ACTION]?.selected_option?.value as string | undefined;

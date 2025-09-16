@@ -1,10 +1,13 @@
-import { sendDM, sendDMBlocks } from '../slack/api';
-import { slackDate, humanizeSeconds } from '../slack/format';
-import type { Env } from '../types';
+import { announceIfEnabled } from './announce';
+import { getEnvByName } from './envs';
 import { log } from './log';
 import { purgeOldData } from './retention';
 import { getDmEnabled, getDmReminderEnabled, getReminderLeadSeconds, getReminderMinTTLSeconds, getDmExpiryEnabled, getDefaultExtendSeconds } from './settings';
+import { sendDM, sendDMBlocks } from '../slack/api';
 import { actions, button, section } from '../slack/blocks';
+import { freeAnnouncementBlocks, busyAnnouncementBlocks } from '../slack/blocks/announce';
+import { slackDate, humanizeSeconds } from '../slack/format';
+import type { Env } from '../types';
 
 type ExpiredHoldRow = {
   id: string;
@@ -107,6 +110,16 @@ async function releaseExpired(env: Env, now: number): Promise<void> {
       if (dmEnabled) {
         await sendDM(env, r.user_id, `Your hold on \`${r.name}\` expired and the environment is now free.`);
       }
+      // Channel announcement: now free (if enabled and channel set)
+      const info = await getEnvByName(env, r.name);
+      if (info) {
+        await announceIfEnabled(
+          env,
+          info as any,
+          `• \`${r.name}\` is now free.`,
+          freeAnnouncementBlocks(r.name, `• \`${r.name}\` is now free.`)
+        );
+      }
       await log(env, 'info', 'cron: no queue, env now free', { env: r.name });
       continue;
     }
@@ -129,6 +142,18 @@ async function releaseExpired(env: Env, now: number): Promise<void> {
     if (dmEnabled) {
       await sendDM(env, r.user_id, `Your hold on \`${r.name}\` expired and was reassigned to the next person in the queue.`);
       await sendDM(env, next.user_id, `You now hold \`${r.name}\` until ${slackDate(expires)} (${humanizeSeconds(ttl)}).`);
+    }
+    // Channel announcement: reassigned to next (if enabled and channel set)
+    {
+      const info = await getEnvByName(env, r.name);
+      if (info) {
+        await announceIfEnabled(
+          env,
+          info as any,
+          `• \`${r.name}\` assigned to <@${next.user_id}> until ${slackDate(expires)} (${humanizeSeconds(ttl)}).`,
+          busyAnnouncementBlocks(r.name, `• \`${r.name}\` assigned to <@${next.user_id}> until ${slackDate(expires)} (${humanizeSeconds(ttl)}).`)
+        );
+      }
     }
   }
 }

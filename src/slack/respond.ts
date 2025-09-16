@@ -33,3 +33,8 @@ export function inChannel(text: string): SlackInChannel {
 export function ok(): Response {
   return jsonResponse({ ok: true });
 }
+
+// Special sentinel to indicate: suppress any visible response to the slash command
+// The worker will detect this and return an empty 200 body so Slack shows nothing.
+export const NO_ACK = Symbol('NO_ACK');
+export function noAck(): any { return NO_ACK as any; }

@@ -55,14 +55,14 @@ EnvDibs is a Slack slash-command app to manage dibs on shared development enviro
 ## Quick Start
 
 - Self-host this app: follow [Deploy steps](#deploy-steps) to create your Slack app, configure scopes/URLs, set secrets, provision D1, and deploy the Cloudflare Worker. Then install your app to your Slack workspace.
-- In Slack, run `/dib help` to see commands.
-- Create your first environment: `/dib add qa-msel default 60m`, then try `/dib on qa-msel for 30m`.
+- In Slack, run `/claim` (alias `/dib`) to see commands.
+- Create your first environment: `/claim add qa-msel default 60m`, then try `/claim on qa-msel for 30m`.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  SC["Slack: Slash command /dib"] -->|HTTPS| W["Cloudflare Worker"]
+  SC["Slack: Slash command /claim (alias /dib)"] -->|HTTPS| W["Cloudflare Worker"]
   SI["Slack: Interactivity (buttons and modals)"] -->|HTTPS| W
   SE["Slack: Events (app_home_opened)"] -->|HTTPS| W
   CRON["Cloudflare Cron (1m)"] --> W
@@ -219,31 +219,31 @@ Notes:
 
 | Command | Description |
 |---|---|
-| `/dib on <env> [for <duration>] [note <text>]` | Acquire a hold if free, or queue if busy. Examples: `for 2h`, `for 90m`, `note urgent fix`. |
-| `/dib off <env>` | Release your hold. If you are queued, removes you from queue. |
-| `/dib list [all|active|mine|free]` | Show environments: all (default), active, mine (your holds/queues), or free only. |
-| `/dib add <env> [default <duration>] [desc <text>]` | Admin: create/unarchive environment and set default TTL/description. |
-| `/dib extend <env> [for <duration>]` | Holder only: extend the current hold. If duration omitted, uses the global default extend value. Respects per-env max TTL; resets reminders. |
-| `/dib info <env>` | Show details: holder, remaining, queue, default TTL, max TTL, description. |
-| `/dib extend-default <duration>` | Admin: set the global default extend duration used by Home tab Extend and by `/dib extend` when no duration is provided. |
-| `/dib set-default <env> <duration>` | Admin: set per-environment default TTL. |
-| `/dib set-max <env> <duration|none>` | Admin: set per-environment max TTL (or `none` to remove the limit). |
-| `/dib force-off <env>` | Admin: force release current hold and assign next in queue if any. |
-| `/dib transfer <env> to <@user|U123>` | Admin: transfer the current hold to another user, preserving expiry. |
-| `/dib archive <env>` | Admin: archive an environment (hidden from list; cannot be acquired). |
-| `/dib unarchive <env>` | Admin: unarchive an environment. |
-| `/dib rename <env> <new-name>` | Admin: rename environment (normalized; prevents collisions). |
-| `/dib settings modal` | Admin: open a modal to manage global DMs/reminders/announcements/log level and per-env TTLs, rename, and announce channel. |
-| `/dib admin <add|remove|list> [<@user|U123>]` | Admin: manage dynamic admins list. |
-| `/dib dms <on|off>` | Admin: toggle global DMs (must be ON for reminder/expiry DMs to send). |
-| `/dib dms reminder <on|off>` | Admin: toggle reminder DMs only. |
-| `/dib dms expiry <on|off>` | Admin: toggle expiry DMs only. |
-| `/dib settings` | Show current settings: DMs (global/reminder/expiry), reminder lead/min TTL, log level. |
-| `/dib reminders <lead|min> <duration>` | Admin: configure reminder timing (lead window and minimum TTL required). |
-| `/dib log <info|warning|error>` | Admin: set runtime log verbosity for cron and commands. |
-| `/dib announce <on|off>` | Admin: toggle global announcements. |
-| `/dib announce <env> <on|off>` | Admin: toggle per-environment announcements. |
-| `/dib announce channel <env> <#channel|C123>` | Admin: set per-environment announcement channel. |
+| `/claim on <env> [for <duration>] [note <text>]` | Acquire a hold if free, or queue if busy. Examples: `for 2h`, `for 90m`, `note urgent fix`. |
+| `/claim off <env>` | Release your hold. If you are queued, removes you from queue. |
+| `/claim list [all|active|mine|free]` | Show environments: all (default), active, mine (your holds/queues), or free only. |
+| `/claim add <env> [default <duration>] [desc <text>]` | Admin: create/unarchive environment and set default TTL/description. |
+| `/claim extend <env> [for <duration>]` | Holder only: extend the current hold. If duration omitted, uses the global default extend value. Respects per-env max TTL; resets reminders. |
+| `/claim info <env>` | Show details: holder, remaining, queue, default TTL, max TTL, description. |
+| `/claim extend-default <duration>` | Admin: set the global default extend duration used by Home tab Extend and by `/claim extend` when no duration is provided. |
+| `/claim set-default <env> <duration>` | Admin: set per-environment default TTL. |
+| `/claim set-max <env> <duration|none>` | Admin: set per-environment max TTL (or `none` to remove the limit). |
+| `/claim force-off <env>` | Admin: force release current hold and assign next in queue if any. |
+| `/claim transfer <env> to <@user|U123>` | Admin: transfer the current hold to another user, preserving expiry. |
+| `/claim archive <env>` | Admin: archive an environment (hidden from list; cannot be acquired). |
+| `/claim unarchive <env>` | Admin: unarchive an environment. |
+| `/claim rename <env> <new-name>` | Admin: rename environment (normalized; prevents collisions). |
+| `/claim settings modal` | Admin: open a modal to manage global DMs/reminders/announcements/log level and per-env TTLs, rename, and announce channel. |
+| `/claim admin <add|remove|list> [<@user|U123>]` | Admin: manage dynamic admins list. |
+| `/claim dms <on|off>` | Admin: toggle global DMs (must be ON for reminder/expiry DMs to send). |
+| `/claim dms reminder <on|off>` | Admin: toggle reminder DMs only. |
+| `/claim dms expiry <on|off>` | Admin: toggle expiry DMs only. |
+| `/claim settings` | Show current settings: DMs (global/reminder/expiry), reminder lead/min TTL, log level. |
+| `/claim reminders <lead|min> <duration>` | Admin: configure reminder timing (lead window and minimum TTL required). |
+| `/claim log <info|warning|error>` | Admin: set runtime log verbosity for cron and commands. |
+| `/claim announce <on|off>` | Admin: toggle global announcements. |
+| `/claim announce <env> <on|off>` | Admin: toggle per-environment announcements. |
+| `/claim announce channel <env> <#channel|C123>` | Admin: set per-environment announcement channel. |
 
 ## App Home (Home tab)
 
@@ -285,7 +285,7 @@ How to test App Home
 
 ### Admin Settings modal
 
-- Open via `/dib settings modal` (admin only); requires a Slack context (trigger_id)
+- Open via `/claim settings modal` (admin only); requires a Slack context (trigger_id)
 - Global controls: DMs, reminder DMs, expiry DMs, announcements (global), reminder lead/min TTL, default extend, log level
 - Per-env controls: default TTL, max TTL (or none), rename, per-env announcements on/off, announcement channel
 - After apply, the app sends the admin a DM confirmation: “Applied admin settings.”
@@ -293,12 +293,27 @@ How to test App Home
 DM behavior (precedence)
 - Global DMs act as a master switch. If Global DMs are OFF, reminder and expiry DMs will not be sent even if those per-feature toggles are ON.
 
+### Slash responses (acks)
+
+- Toggle: `/claim settings acks <on|off>`
+- When OFF, successes for on/off are suppressed, but important feedback still appears:
+  - `/claim on`:
+    - Free → held: suppressed
+    - Busy → queued: shown (you’ll see “queued at position …”)
+    - Already hold / already queued / invalid request: shown
+  - `/claim off`:
+    - Holder releases: suppressed (free or assigned to next)
+    - Leaving your own queue position: shown
+    - Already free / not the holder: shown
+- `/claim extend` always responds with a confirmation or an error.
+
 ## Announcements
 
-- Global toggle: `/dib announce <on|off>`
-- Per-environment toggle: `/dib announce <env> <on|off>`
-- Set announcement channel: `/dib announce channel <env> <#channel|C123>`
-- Announcements are posted when environments are assigned, released (free), or reassigned by force/off or expiry.
+- Global toggle: `/claim announce <on|off>`
+- Per-environment toggle: `/claim announce <env> <on|off>`
+- Set announcement channel: `/claim announce channel <env> <#channel|C123>`
+- Announcements are posted when environments are assigned, released (free), or reassigned by force/off.
+- Announcements are not posted on expiry; those use DMs if enabled.
 
 ## Prerequisites
 
@@ -318,7 +333,7 @@ DM behavior (precedence)
 2. Create and configure the Slack app
    - Go to https://api.slack.com/apps → Create New App (from scratch)
    - Basic Information → copy the Signing Secret
-   - Slash Commands → Create `/dib`
+   - Slash Commands → Create `/claim` (optionally also create `/dib` as an alias)
      - Request URL: `https://<your-worker-subdomain>.workers.dev/slack/commands`
      - Short description: "Dibs, not drama—for dev environments"
      - Usage hint: "on|off|list|add|dms|reminders|log"
@@ -396,7 +411,7 @@ Notes
 
 | Method | Path               | Purpose                                      |
 |--------|--------------------|----------------------------------------------|
-| POST   | /slack/commands    | Slash commands (/dib …)                      |
+| POST   | /slack/commands    | Slash commands (/claim or /dib …)            |
 | POST   | /slack/events      | Events API (URL verification + ack)          |
 | POST   | /slack/interactive | Interactive components (buttons/modals; ack then process) |
 
@@ -413,7 +428,7 @@ Notes
 - Static admins: set a comma-separated list of Slack user IDs via either:
   - Wrangler Secret (recommended, keeps IDs out of git): `wrangler secret put ADMIN_USERS`
   - Or `wrangler.toml` `[vars].ADMIN_USERS` for non-sensitive IDs (committed to git)
-- Dynamic admins: managed in the `admins` table via `/dib admin add|remove|list`.
+- Dynamic admins: managed in the `admins` table via `/claim admin add|remove|list`.
 - Slack workspace admins/owners: if available via `users.info` (requires `users:read`), they are treated as admins.
 
 <details>

@@ -7,6 +7,7 @@ const KEY_REMINDER_LEAD_SECONDS = 'reminder_lead_seconds';
 const KEY_REMINDER_MIN_TTL_SECONDS = 'reminder_min_ttl_seconds';
 const KEY_ANNOUNCE_GLOBAL_ENABLED = 'announce_global_enabled';
 const KEY_DEFAULT_EXTEND_SECONDS = 'default_extend_seconds';
+const KEY_COMMAND_ACKS_ENABLED = 'command_acks_enabled';
 
 export async function getDmEnabled(env: Env): Promise<boolean> {
   const row = await env.DB
@@ -127,4 +128,25 @@ export async function getDefaultExtendSeconds(env: Env, fallback = 15 * 60): Pro
 
 export async function setDefaultExtendSeconds(env: Env, seconds: number): Promise<void> {
   await setNumberSetting(env, KEY_DEFAULT_EXTEND_SECONDS, seconds);
+}
+
+// Slash command responses (on/off/extend): show responses when enabled; suppress when disabled
+export async function getCommandAcksEnabled(env: Env): Promise<boolean> {
+  const row = await env.DB
+    .prepare('SELECT value FROM settings WHERE key = ?')
+    .bind(KEY_COMMAND_ACKS_ENABLED)
+    .first<{ value: string }>();
+  // Default ON to preserve current behavior
+  const raw = row?.value;
+  if (raw === null || raw === undefined) {return true;}
+  const v = raw.toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
+export async function setCommandAcksEnabled(env: Env, enabled: boolean): Promise<void> {
+  const value = enabled ? '1' : '0';
+  await env.DB
+    .prepare('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .bind(KEY_COMMAND_ACKS_ENABLED, value)
+    .run();
 }

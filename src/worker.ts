@@ -1,7 +1,7 @@
 /*
  EnvDibs Worker (TypeScript) — Phase 1 scaffold
  - Verifies Slack request signatures
- - /slack/commands: routes /dib commands to handlers (add, on, off, list)
+ - /slack/commands: routes /claim commands to handlers (add, on, off, list)
  - Uses Cloudflare D1 for storage
 */
 
@@ -9,10 +9,10 @@ import { routeCommand } from './commands/router';
 import { publishHomeThrottled } from './interactive/home';
 import { routeInteractive } from './interactive/router';
 import { addEnvironment, getEnvByName } from './services/envs';
-import { log } from './services/log';
+import { log, primeLogLevelCache } from './services/log';
 import { initSchema } from './services/schema';
 import { scheduledSweep } from './services/sweep';
-import { jsonResponse, ok } from './slack/respond';
+import { jsonResponse, ok, NO_ACK } from './slack/respond';
 import { verifySlackRequest } from './slack/verify';
 import type { Env, ExecutionContext } from './types';
 
@@ -85,6 +85,8 @@ async function handleSlashCommand(request: Request, env: Env, ctx: ExecutionCont
   if (!verification.verified) {
     return jsonResponse({ error: 'invalid_signature', reason: verification.reason }, 401);
   }
+  // Prime log level cache to avoid repeated D1 reads during this request
+  await primeLogLevelCache(env);
 
   const params = new URLSearchParams(verification.rawBody);
   const command = params.get('command') || '';
@@ -96,15 +98,19 @@ async function handleSlashCommand(request: Request, env: Env, ctx: ExecutionCont
 
   // Avoid logging raw user-entered text per privacy policy
   await log(env, 'info', 'slash: received', { command, user_id, channel_id });
-  // Only handle /dib
-  if (command !== '/dib') {
+  // Handle both /claim and /dib (alias)
+  if (command !== '/dib' && command !== '/claim') {
     await log(env, 'warning', 'slash: unsupported command', { command });
-    return jsonResponse({ response_type: 'ephemeral', text: 'Unsupported command. Use /dib.' });
+    return jsonResponse({ response_type: 'ephemeral', text: 'Unsupported command. Use /claim or /dib.' });
   }
 
   try {
     const result = await routeCommand({ text, user_id, channel_id, team_id, trigger_id }, env, ctx);
-    await log(env, 'info', 'slash: handled /dib', { user_id, channel_id });
+    await log(env, 'info', 'slash: handled command', { user_id, channel_id });
+    if (result === NO_ACK) {
+      // Suppress any visible response
+      return new Response('', { status: 200 });
+    }
     return jsonResponse(result);
   } catch (err: any) {
     await log(env, 'error', 'slash: unhandled error', { error: String(err?.message || err) });
@@ -117,6 +123,8 @@ async function handleEvents(request: Request, env: Env, ctx: ExecutionContext): 
   if (!verification.verified) {
     return jsonResponse({ error: 'invalid_signature', reason: verification.reason }, 401);
   }
+  // Prime log level cache early for this request
+  await primeLogLevelCache(env);
 
   let payload: any;
   try {
@@ -149,6 +157,8 @@ async function handleInteractive(request: Request, env: Env, ctx: ExecutionConte
   if (!verification.verified) {
     return jsonResponse({ error: 'invalid_signature', reason: verification.reason }, 401);
   }
+  // Prime log level cache before routing interactivity
+  await primeLogLevelCache(env);
   // Parse payload=... form body
   const params = new URLSearchParams(verification.rawBody);
   const payloadRaw = params.get('payload') || '';
@@ -250,7 +260,13 @@ async function handleTestCommand(request: Request, env: Env, ctx: ExecutionConte
     if (!(env as any).ADMIN_USERS) {
       (env as any).ADMIN_USERS = 'U_ADMIN';
     }
+    // Prime cache in tests too, to mirror production behavior
+    await primeLogLevelCache(env);
     const result = await routeCommand({ text, user_id, channel_id, team_id, trigger_id }, env, ctx);
+    if (result === NO_ACK) {
+      // In tests, mirror production behavior: empty 200
+      return new Response('', { status: 200 });
+    }
     return jsonResponse(result);
   } catch (err: any) {
     return jsonResponse({ ok: false, error: String(err?.message || err) }, 500);
@@ -268,7 +284,7 @@ async function handleTestCron(env: Env): Promise<Response> {
 }
 
 // Test helper: route interactive payload directly (no Slack verification)
-async function handleTestInteractive(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function handleTestInteractive(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
   try {
     const payload = await request.json().catch(() => null);
     if (payload) {

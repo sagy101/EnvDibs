@@ -18,11 +18,16 @@ export async function dibOn(
 ) {
   const info = await getEnvByName(env, envName);
   if (!info) {
-    return { ok: false, message: `Environment not found. Ask an admin to add it: /dib add \`${envName}\`` };
+    return { ok: false, message: `Environment not found. Ask an admin to add it: /claim add \`${envName}\`` };
   }
 
   const now = Math.floor(Date.now() / 1000);
   const envCap = info.max_ttl_seconds ?? MAX_TTL_SECONDS;
+  // If the user explicitly requested a duration that exceeds the env's max, treat as error
+  if (typeof opts?.requestedSeconds === 'number' && opts.requestedSeconds > envCap) {
+    await log(env, 'info', 'dib:on requested over max', { env: info.name, user: userId, requested: opts.requestedSeconds, cap: envCap });
+    return { ok: false, message: `Requested duration exceeds max TTL for \`${info.name}\`. Max is ${humanizeSeconds(envCap)}.` };
+  }
   const ttl = Math.min(opts?.requestedSeconds || info.default_ttl_seconds, envCap, MAX_TTL_SECONDS);
   await log(env, 'info', 'dib:on begin', { env: info.name, user: userId, requested: opts?.requestedSeconds, ttl });
 
@@ -71,7 +76,8 @@ export async function dibOn(
     if (active && active.user_id === userId) {
       const remaining = Math.max(0, active.expires_at - now);
       await log(env, 'info', 'dib:on already-holder', { env: info.name, user: userId, remaining });
-      return { ok: true, message: `You already hold \`${info.name}\` (remaining ${humanizeSeconds(remaining)}).` };
+      // Mark as error so the router shows this message even when acks are suppressed
+      return { ok: false, message: `You already hold \`${info.name}\` (remaining ${humanizeSeconds(remaining)}).` };
     }
 
     // Enqueue if not already queued
@@ -84,7 +90,8 @@ export async function dibOn(
       await log(env, 'info', 'dib:on already-queued', { env: info.name, user: userId, position: existingQ.position });
       const base = active ? Math.max(0, active.expires_at - now) : 0;
       const eta = base + Math.max(0, existingQ.position - 1) * (info.default_ttl_seconds || 0);
-      return { ok: true, message: `\`${info.name}\` is busy. You are already in the queue at position ${existingQ.position}. ETA ~ ${humanizeSeconds(eta)}.` };
+      // Mark as error so user sees the feedback even when acks are suppressed
+      return { ok: false, message: `\`${info.name}\` is busy. You are already in the queue at position ${existingQ.position}. ETA ~ ${humanizeSeconds(eta)}.` };
     }
 
     const posRow = await env.DB
@@ -102,10 +109,12 @@ export async function dibOn(
     const base = active ? Math.max(0, active.expires_at - now) : 0;
     const eta = base + Math.max(0, position - 1) * (info.default_ttl_seconds || 0);
     if (active) {
-      return { ok: true, message: `\`${info.name}\` is currently held by <@${active.user_id}> until ${slackDate(active.expires_at)}. You are queued at position ${position}. ETA ~ ${humanizeSeconds(eta)}.` };
+      // Queue join is not full success (user asked to claim, not queue),
+      // so treat as non-success to ensure it is shown when Acks are OFF.
+      return { ok: false, message: `\`${info.name}\` is currently held by <@${active.user_id}> until ${slackDate(active.expires_at)}. You are queued at position ${position}. ETA ~ ${humanizeSeconds(eta)}.` };
     }
     // Fallback message if active unexpectedly missing after conflict
-    return { ok: true, message: `\`${info.name}\` is currently busy. You are queued at position ${position}. ETA ~ ${humanizeSeconds(eta)}.` };
+    return { ok: false, message: `\`${info.name}\` is currently busy. You are queued at position ${position}. ETA ~ ${humanizeSeconds(eta)}.` };
   });
 }
 
@@ -184,7 +193,8 @@ export async function dibOff(env: Env, userId: string, envName: string, ctx?: Ex
         .bind(queued.id)
         .run();
       await log(env, 'info', 'dib:off dequeued-self', { env: info.name, user: userId, position: queued.position });
-      return { ok: true, message: `Removed you from the queue for \`${info.name}\`.` };
+      // Treat as non-success so the confirmation is visible even when Acks are OFF
+      return { ok: false, message: `Removed you from the queue for \`${info.name}\`.` };
     }
 
     if (active) {
@@ -192,7 +202,8 @@ export async function dibOff(env: Env, userId: string, envName: string, ctx?: Ex
       return { ok: false, message: `You do not hold \`${info.name}\`. It is held by <@${active.user_id}> until ${slackDate(active.expires_at)}.` };
     } else {
       await log(env, 'info', 'dib:off already-free', { env: info.name });
-      return { ok: true, message: `\`${info.name}\` is already free.` };
+      // Consider this a no-op error so users see feedback even when acks are suppressed
+      return { ok: false, message: `\`${info.name}\` is already free.` };
     }
   });
 }
@@ -316,7 +327,7 @@ export async function dibExtend(env: Env, userId: string, envName: string, exten
   const newExpires = active.started_at + allowedTotal;
 
   if (newExpires <= active.expires_at) {
-    return { ok: true, message: `Max TTL reached for \`${info.name}\`.` };
+    return { ok: false, message: `Max TTL reached for \`${info.name}\`.` };
   }
 
   await env.DB
